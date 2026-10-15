@@ -140,6 +140,15 @@ function hist(){let h=[];try{h=JSON.parse(localStorage.getItem('bazas-hist')||'[
 let pend=null;
 function say(m){let e=document.getElementById('toast');if(!e){e=document.createElement('div');e.id='toast';e.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:12px 14px;border-radius:10px;z-index:9;box-shadow:0 4px 16px rgba(0,0,0,.3)';document.body.appendChild(e);}e.textContent=m;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>{e.style.display='none'},5000);}
 window.alert=function(m){say(m)};
+function ask(msg,fn){
+  const o=document.createElement('div');
+  o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;z-index:20';
+  o.innerHTML=`<div style="background:var(--card);color:var(--ink);border-radius:16px;padding:22px;max-width:340px;width:100%;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.4)"><p style="font-size:1.1rem;margin:0 0 18px">${msg}</p><div class="row" style="justify-content:center"><button class="ghost" id="no">Cancelar</button><button id="si">Confirmar</button></div></div>`;
+  document.body.appendChild(o);
+  o.onclick=e=>{if(e.target===o)o.remove()};
+  o.querySelector('#no').onclick=()=>o.remove();
+  o.querySelector('#si').onclick=()=>{o.remove();fn();};
+}
 function confirmar(k,msg){if(pend===k){pend=null;return true;}pend=k;say(msg+' Tocá de nuevo para confirmar.');setTimeout(()=>{if(pend===k)pend=null},5000);return false;}
 function over(){
   const t=totals(),max=Math.max(...t);
@@ -156,8 +165,8 @@ async function saveRec(){
     const b=document.getElementById('status');if(b)b.innerHTML='No se pudo guardar. <button onclick="saveRec()">Reintentar</button>';
   }
 }
-function finish(){
-  if(!confirmar('fin','¿Terminar la partida y guardarla?'))return;
+function finish(){ask('¿Terminar la partida y guardarla?',doFinish);}
+function doFinish(){
   S.over=true;S.saved=false;
   S.rec={date:new Date().toISOString(),players:S.players,rounds:S.rounds,cfg:S.cfg,pens:S.pens||[],totals:totals()};
   save();render();saveRec();
@@ -172,7 +181,7 @@ function hint(){
   const f=t-s;
   h.textContent=(ok&&t>=1&&f>=0)?S.players[di]+' (reparte) no puede pedir '+f+'.':'';
 }
-function reset(){if(confirmar('reset','¿Empezar una nueva partida?')){S.started=false;S.over=false;S.pens=[];S.rounds=[];save();render();}}
+function reset(){ask('¿Empezar una nueva partida?',()=>{S.started=false;S.over=false;S.pens=[];S.rounds=[];save();render();});}
 render();
 if(S.over&&!S.saved&&S.rec)saveRec();
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
