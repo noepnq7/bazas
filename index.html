@@ -64,9 +64,9 @@ function render(){
   app.innerHTML=S.started?game():setup();
 }
 function setup(){
-  return `<div class="card"><h2>Jugadores</h2>${S.players.length>1?`<small>Con ${S.players.length} jugadores: máximo ${maxT()} bazas por ronda (mazo de 52, siempre queda al menos una carta en el medio).</small>`:''}
+  return `<div class="card"><h2>Jugadores</h2><small class="mut" style="display:block;margin-bottom:8px">Ordenalos como están sentados en la mesa. El primero reparte primero y después sigue la rotación.</small>${S.players.length>1?`<small>Con ${S.players.length} jugadores: máximo ${maxT()} bazas por ronda (mazo de 52, siempre queda al menos una carta en el medio).</small>`:''}
   <div class="row"><input type="text" id="np" placeholder="Nombre" maxlength="20" onkeydown="if(event.key==='Enter')addP()"><button onclick="addP()">Agregar</button></div>
-  <div class="chips">${S.players.map((p,i)=>`<span class="chip">${esc(p)}<button onclick="delP(${i})" aria-label="Quitar">×</button></span>`).join("")}</div></div>
+  <div style="margin-top:8px">${S.players.map((p,i)=>`<div class="row" style="justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0"><span><small class="mut">${i+1}.</small> ${esc(p)}</span><span class="row" style="gap:6px"><button class="ghost" style="width:44px;height:40px;padding:0" onclick="mvP(${i},-1)" aria-label="Subir" ${i===0?'disabled':''}>▲</button><button class="ghost" style="width:44px;height:40px;padding:0" onclick="mvP(${i},1)" aria-label="Bajar" ${i===S.players.length-1?'disabled':''}>▼</button><button class="ghost" style="width:44px;height:40px;padding:0" onclick="delP(${i})" aria-label="Quitar">×</button></span></div>`).join("")}</div></div>
   <div class="card"><h2>Puntaje</h2>
   <small>Si acierta: base + bazas pedidas al cuadrado (1→11, 2→14, 3→19…). Si falla: resta 3 por cada baza de diferencia (mínimo -3).</small>
   <div class="cfg">
@@ -74,7 +74,7 @@ function setup(){
   
   <label for="c3">Penalidad por baza de diferencia</label><input type="number" id="c3" value="${S.cfg.miss}" onchange="cfg()">
   </div></div>
-  <button onclick="start()" ${S.players.length<2?"disabled style='opacity:.5'":""}>Empezar partida</button> <button class="ghost" onclick="showH=!showH;render()">${showH?'Ocultar':'Ver'} historial</button>${showH?hist():''}`;
+  <button onclick="ask('¿Empezar la partida con estos jugadores?',start)" ${S.players.length<2?"disabled style='opacity:.5'":""}>Empezar partida</button> <button class="ghost" onclick="showH=!showH;render()">${showH?'Ocultar':'Ver'} historial</button>${showH?hist():''}`;
 }
 function game(){
   if(S.over)return over();
@@ -98,7 +98,8 @@ function game(){
   <div class="row" style="margin-top:40px;padding-top:16px;border-top:1px solid var(--line)"><button class="ghost" onclick="finish()" ${S.rounds.length?"":"disabled"}>Terminar partida</button><button class="ghost" onclick="reset()">Nueva partida</button></div>`;
 }
 function addP(){const e=document.getElementById("np"),v=e.value.trim();if(!v||S.players.length>=51)return;S.players.push(v);save();render();document.getElementById("np").focus();}
-function delP(i){S.players.splice(i,1);save();render();}
+function mvP(i,d){const j=i+d;if(j<0||j>=S.players.length)return;[S.players[i],S.players[j]]=[S.players[j],S.players[i]];save();render();}
+function delP(i){ask('¿Quitar a '+esc(S.players[i])+'?',()=>{S.players.splice(i,1);save();render();});}
 function cfg(){S.cfg={base:+c1.value||0,miss:+c3.value||0};save();}
 function start(){showT=false;S.started=true;S.pens=[];S.rounds=[];save();render();}
 function closeR(){
@@ -113,7 +114,7 @@ function closeR(){
   const sb=b.reduce((a,v)=>a+v,0),sw=w.reduce((a,v)=>a+v,0);
   if(sb===t)return alert(`Los pedidos suman ${t}, igual que las bazas en juego. ${S.players[S.rounds.length%S.players.length]} (reparte) tiene que pedir otro número.`);
   if(sw!==t)return alert(`Las bazas ganadas suman ${sw} y tendrían que sumar ${t}.`);
-  S.t=t;S.rounds.push({b,w,t});save();render();
+  ask('¿Cerrar la ronda?',()=>{S.t=t;S.rounds.push({b,w,t});save();render();});
 }
 
 let pSel=null,pAmt=3;
@@ -124,14 +125,16 @@ function selP(i){pSel=i;keep(render);}
 function stepP(d){pAmt=Math.max(1,pAmt+d);keep(render);}
 function addPen(){
   if(pSel===null)return say('Elegí a qué jugador penalizar.');
-  const nm=S.players[pSel];
-  (S.pens=S.pens||[]).push({i:pSel,n:pAmt,r:S.rounds.length+1});
-  pSel=null;save();keep(render);say(nm+' pierde '+pAmt+' puntos.');
+  const nm=S.players[pSel],i0=pSel,n0=pAmt;
+  ask('¿Restar '+n0+' puntos a '+esc(nm)+'?',()=>{
+    (S.pens=S.pens||[]).push({i:i0,n:n0,r:S.rounds.length+1});
+    pSel=null;save();keep(render);
+  });
 }
-function delPen(k){S.pens.splice(k,1);save();keep(render);}
+function delPen(k){ask('¿Quitar esta penalización?',()=>{S.pens.splice(k,1);save();keep(render);});}
 function pensCard(){
   const L=S.pens||[];
-  return `<div class="card"><h2>Penalizar por error</h2><div class="chips" style="margin:0 0 12px">${S.players.map((p,i)=>`<button class="${pSel===i?'':'ghost'}" onclick="selP(${i})">${esc(p)}</button>`).join('')}</div><div class="row step"><button onclick="stepP(-1)" aria-label="Menos">−</button><input type="text" readonly id="pamt" value="${pAmt}"><button onclick="stepP(1)" aria-label="Más">+</button><button onclick="addPen()" style="flex:1;min-width:110px;width:auto">Restar puntos</button></div>${L.length?`<div style="margin-top:12px">${L.map((x,k)=>`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding:6px 0"><span>Ronda ${x.r} · ${esc(S.players[x.i]||'')} <b class="bad">−${x.n}</b></span><button class="ghost" onclick="delPen(${k})" aria-label="Quitar">×</button></div>`).join('')}</div>`:''}</div>`;
+  return `<div class="card"><h2>Penalizar por error</h2><div class="chips" style="margin:0 0 12px">${S.players.map((p,i)=>`<button class="${pSel===i?'':'ghost'}" onclick="selP(${i})">${esc(p)}</button>`).join('')}</div><div class="row step"><button onclick="stepP(-1)" aria-label="Menos">−</button><input type="text" readonly id="pamt" value="${pAmt}"><button onclick="stepP(1)" aria-label="Más">+</button></div><button onclick="addPen()" style="width:100%;height:48px;margin-top:12px">Restar puntos</button>${L.length?`<div style="margin-top:12px">${L.map((x,k)=>`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding:6px 0"><span>Ronda ${x.r} · ${esc(S.players[x.i]||'')} <b class="bad">−${x.n}</b></span><button class="ghost" onclick="delPen(${k})" aria-label="Quitar">×</button></div>`).join('')}</div>`:''}</div>`;
 }
 let showH=false;
 function hist(){let h=[];try{h=JSON.parse(localStorage.getItem('bazas-hist')||'[]')}catch(e){}
